@@ -5,15 +5,15 @@ import torch.nn.functional as F
 
 class BasicConv2d(nn.Module):
 
-    def __init__(self, in_channels, out_channels, **kwargs):
-        super(BasicConv2d, self).__init__()
-        self.conv = nn.Conv2d(in_channels, out_channels, bias=False, **kwargs)
-        self.bn = nn.BatchNorm2d(out_channels, eps=1e-5)
+  def __init__(self, in_channels, out_channels, **kwargs):
+    super(BasicConv2d, self).__init__()
+    self.conv = nn.Conv2d(in_channels, out_channels, bias=False, **kwargs)
+    self.bn = nn.BatchNorm2d(out_channels, eps=1e-5)
 
-    def forward(self, x):
-        x = self.conv(x)
-        x = self.bn(x)
-        return F.relu(x, inplace=True)
+  def forward(self, x):
+    x = self.conv(x)
+    x = self.bn(x)
+    return F.relu(x, inplace=True)
 
 
 class Inception(nn.Module):
@@ -84,21 +84,22 @@ class FaceBoxes(nn.Module):
     self.loc, self.conf = self.multibox(self.num_classes)
 
     if self.phase == 'test':
-        self.softmax = nn.Softmax(dim=-1)
+      self.softmax = nn.Softmax(dim=-1)
 
     if self.phase == 'train':
-        for m in self.modules():
-            if isinstance(m, nn.Conv2d):
-                if m.bias is not None:
-                    nn.init.xavier_normal_(m.weight.data)
-                    m.bias.data.fill_(0.02)
-                else:
-                    m.weight.data.normal_(0, 0.01)
-            elif isinstance(m, nn.BatchNorm2d):
-                m.weight.data.fill_(1)
-                m.bias.data.zero_()
+      for m in self.modules():
+        if isinstance(m, nn.Conv2d):
+          if m.bias is not None:
+            nn.init.xavier_normal_(m.weight.data)
+            m.bias.data.fill_(0.02)
+          else:
+            m.weight.data.normal_(0, 0.01)
+        elif isinstance(m, nn.BatchNorm2d):
+          m.weight.data.fill_(1)
+          m.bias.data.zero_()
 
-  def multibox(self, num_classes):
+  @staticmethod
+  def multibox(num_classes):
     loc_layers = []
     conf_layers = []
     loc_layers += [nn.Conv2d(128, 21 * 4, kernel_size=3, padding=1)]
@@ -115,30 +116,35 @@ class FaceBoxes(nn.Module):
     loc = list()
     conf = list()
 
+    # backbone 可以替换为其它网络，
     x = self.conv1(x)
     x = F.max_pool2d(x, kernel_size=3, stride=2, padding=1)
     x = self.conv2(x)
     x = F.max_pool2d(x, kernel_size=3, stride=2, padding=1)
+
     x = self.inception1(x)
     x = self.inception2(x)
     x = self.inception3(x)
     detection_sources.append(x)
 
     x = self.conv3_1(x)
-    x = self.conv3_2(x)
+    x = self.conv3_2(x)   # 256x16x16
     detection_sources.append(x)
 
     x = self.conv4_1(x)
     x = self.conv4_2(x)
     detection_sources.append(x)
 
+    # 多尺度预测
     for (x, l, c) in zip(detection_sources, self.loc, self.conf):
-        loc.append(l(x).permute(0, 2, 3, 1).contiguous())
-        conf.append(c(x).permute(0, 2, 3, 1).contiguous())
+      loc.append(l(x).permute(0, 2, 3, 1).contiguous())
+      conf.append(c(x).permute(0, 2, 3, 1).contiguous())
 
     loc = torch.cat([o.view(o.size(0), -1) for o in loc], 1)
     conf = torch.cat([o.view(o.size(0), -1) for o in conf], 1)
 
+    # train不用softmax是因为， 我们目标是找到一个loss，学习系统， 而不是概率值；
+    # 我们有 anchor box，需要先排除容易学习的样本，或者使用 focal loss
     if self.phase == "test":
       output = (loc.view(loc.size(0), -1, 4),
                 self.softmax(conf.view(conf.size(0), -1, self.num_classes)))

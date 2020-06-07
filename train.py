@@ -150,7 +150,7 @@ def train():
     print(
       'Epoch:{}/{} || Epochiter: {}/{} || Iter: {}/{} || L: {:.4f} C: {:.4f} || LR: {:.8f} || Batchtime: {:.4f} s || ETA: {}'.format(
         epoch, max_epoch, (iteration % epoch_size) + 1, epoch_size,
-                          iteration + 1, max_iter, loss_l.item(), loss_c.item(),
+        iteration + 1, max_iter, loss_l.item(), loss_c.item(),
         lr, batch_time,
         str(datetime.timedelta(seconds=eta))))
 
